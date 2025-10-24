@@ -30,6 +30,10 @@
       -> top speed
       -> elapsed time
 
+    TODO solve random heading value - align to compass
+    TODO implement pitch/roll "zeroing"
+    TODO solve i2c.master: I2C transaction timeout detected error
+
 */
 
 //TODO figure out how to subfolder rider files
@@ -97,8 +101,9 @@
     static lv_obj_t * heading_label;
     static lv_obj_t * pitch_label;
     static lv_obj_t * roll_label;
+    static lv_obj_t * slope_label;
     static lv_obj_t * AHRS_dot;
-    
+    static lv_obj_t * AHRS_heading_indicator; // a.k.a "compass"
 
 //~~~~~~~~~~ Timing Variables ~~~~~~~~~~~//
   unsigned long currentMillis;
@@ -158,17 +163,25 @@ void setup() {
       heading_label = lv_label_create(tab2);
       pitch_label = lv_label_create(tab2);
       roll_label = lv_label_create(tab2);
+      slope_label = lv_label_create(tab2);
       lv_obj_align(heading_label, LV_ALIGN_CENTER, 0, -20);
       lv_obj_align(pitch_label, LV_ALIGN_CENTER, 0, 0);
       lv_obj_align(roll_label, LV_ALIGN_CENTER, 0, 20);
+      lv_obj_align(slope_label, LV_ALIGN_CENTER, 0, 40);
       lv_obj_set_style_text_font(heading_label, &lv_font_montserrat_20, NULL);
       lv_obj_set_style_text_font(pitch_label, &lv_font_montserrat_20, NULL);
       lv_obj_set_style_text_font(roll_label, &lv_font_montserrat_20, NULL);
+      lv_obj_set_style_text_font(slope_label, &lv_font_montserrat_20, NULL);
 
       AHRS_dot = lv_btn_create(tab2);
       lv_obj_center(AHRS_dot);
       lv_obj_set_size(AHRS_dot, 30, 30);
       lv_obj_set_style_radius(AHRS_dot, 15, 0);
+
+      AHRS_heading_indicator = lv_btn_create(tab2);
+      lv_obj_set_size(AHRS_heading_indicator, 30, 30);
+      lv_obj_set_style_radius(AHRS_heading_indicator, 15, 0);
+      lv_obj_set_style_bg_color(AHRS_heading_indicator, periwinkle, NULL);
 
     
   //~~~~~~~~~ Finish Setup ~~~~~~~~~~~//
@@ -327,13 +340,17 @@ void loop() {
         }
         pitch = filter.getPitch();
         heading = filter.getYaw();
-        Serial.print("heading:"); Serial.print(heading); Serial.print(",");
-        Serial.print("pitch:"); Serial.print(pitch); Serial.print(",");
-        Serial.print("roll:"); Serial.print(roll); Serial.println();
+        // Serial.print("heading:"); Serial.print(heading); Serial.print(",");
+        // Serial.print("pitch:"); Serial.print(pitch); Serial.print(",");
+        // Serial.print("roll:"); Serial.print(roll); Serial.println();
         update_AHRS_label("H: ", heading_label, heading);
         update_AHRS_label("P: ", pitch_label, pitch);
         update_AHRS_label("R: ", roll_label, roll);
+        update_slope_label(pitch, roll);
+
         update_AHRS_dot(heading, pitch, roll);
+        update_heading_indictor(heading);
+        
 
       IMUPeriodStart = millis();
     }
@@ -379,6 +396,13 @@ void loop() {
         const char * valueArr = valueStr.c_str();
         lv_label_set_text(label, valueArr);
       }
+
+      static void update_slope_label(float pitch, float roll){
+        int slope = sqrt(pitch*pitch + roll*roll);
+        String labelStr = "Slope: " + (String)slope + "deg";
+        const char * labelArr = labelStr.c_str();
+        lv_label_set_text(slope_label, labelArr);
+      }
       
       static void update_AHRS_dot(float h, float p, float r){
         float scalar = 1.5;
@@ -391,6 +415,18 @@ void loop() {
 
         lv_obj_align(AHRS_dot, LV_ALIGN_CENTER, x, y);
       }
+
+      static void update_heading_indictor(float h){       
+        float radius_scalar = 1; // move indicator in or out along radius
+        int x, y;
+        x = (int)(-sin(radians(h)) * screenRadius * radius_scalar);
+        y = (int)( cos(radians(h)) * screenRadius * radius_scalar);
+
+        Serial.print("x:"); Serial.print(x); Serial.print(",");
+        Serial.print("y:"); Serial.print(y); Serial.println();
+        lv_obj_align(AHRS_heading_indicator, LV_ALIGN_CENTER, x, y);
+      }
+
   //~~~~~~~~~~~ Misc Functions ~~~~~~~~~~~~~~~~~~~~~~~//
     void initPSRAM(){
       if(psramInit()){
